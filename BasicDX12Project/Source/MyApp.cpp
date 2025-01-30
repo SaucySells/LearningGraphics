@@ -13,6 +13,10 @@ MyApp::MyApp(HINSTANCE hInstance)
 
 MyApp::~MyApp()
 {
+	for (int i = 0; i < Geometry.size(); ++i)
+	{
+		delete Geometry.at(i);
+	}
 }
 
 //=========================================================================================
@@ -78,6 +82,7 @@ void MyApp::Update(const GameTimer& gt)
 	// Upload the constant buffer with the latest WorldviewProj matrix
 	ObjectConstants objConstants;
 	XMStoreFloat4x4(&objConstants.WorldViewProj, XMMatrixTranspose(worldViewProj));
+	objConstants.Time = XMFLOAT4(gt.TotalTime(), 0.0f, 0.0f, 0.0f);
 	ConstBufferUpload->CopyData(0, objConstants);
 }
 
@@ -111,13 +116,14 @@ void MyApp::Draw(const GameTimer& gt)
 
 	CommandList->SetGraphicsRootSignature(RootSignature.Get());
 	
-	CommandList->IASetVertexBuffers(0, 1, &Geometry.back()->VertexBufferView());
+	CommandList->IASetVertexBuffers(0, 1, &Geometry.at(0)->VertexBufferView());
 	CommandList->IASetIndexBuffer(&Geometry.back()->IndexBufferView());
 	CommandList->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 	CommandList->SetGraphicsRootDescriptorTable(0, CbvHeap->GetGPUDescriptorHandleForHeapStart());
 
-	CommandList->DrawIndexedInstanced(Geometry.back()->DrawArgs["triangle"].IndexCount, 1, 0, 0, 0);
+	CommandList->DrawIndexedInstanced(Geometry.back()->DrawArgs["box"].IndexCount, 1, 0, 0, 0);
+	CommandList->DrawIndexedInstanced(Geometry.back()->DrawArgs["triangle"].IndexCount, 1, Geometry.back()->DrawArgs["triangle"].StartIndexLocation, 0, 0);
 
 	// Indicate a state transition on the resource usage
 	CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
@@ -261,7 +267,7 @@ void MyApp::BuildRootSignature()
 //=========================================================================================
 void MyApp::BuildGeometry()
 {
-	std::array<Vertex, 8> vertices =
+	std::array<Vertex, 11> vertices =
 	{
 		Vertex({ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::White) }),
 		Vertex({ XMFLOAT3(-1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Black) }),
@@ -270,10 +276,13 @@ void MyApp::BuildGeometry()
 		Vertex({ XMFLOAT3(-1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Blue) }),
 		Vertex({ XMFLOAT3(-1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Yellow) }),
 		Vertex({ XMFLOAT3(+1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Cyan) }),
-		Vertex({ XMFLOAT3(+1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Magenta) })
+		Vertex({ XMFLOAT3(+1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Magenta)}),
+		Vertex({ XMFLOAT3(+2.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Black) }),
+		Vertex({ XMFLOAT3(+4.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Black) }),
+		Vertex({ XMFLOAT3(+3.0f, 0.0f, +1.0f), XMFLOAT4(Colors::Black) })
 	};
 
-	std::array<std::uint16_t, 36> indices =
+	std::array<std::uint16_t, 42> indices =
 	{
 		// front face
 		0, 1, 2,
@@ -297,14 +306,19 @@ void MyApp::BuildGeometry()
 
 		// bottom face
 		4, 0, 3,
-		4, 3, 7
+		4, 3, 7,
+
+		// extra triangle
+		8, 9, 10,
+		10, 9, 8
+
 	};
 
 	const UINT64 vertexByteSize = vertices.size() * sizeof(Vertex);
 	const UINT64 indexByteSize = indices.size() * sizeof(std::uint16_t);
 
 	MeshGeometry* newGeometry = new MeshGeometry();
-	newGeometry->Name = "triangle";
+	newGeometry->Name = "box";
 
 	ThrowIfFailed(D3DCreateBlob(vertexByteSize, &newGeometry->VertexBufferCPU));
 	CopyMemory(newGeometry->VertexBufferCPU->GetBufferPointer(), vertices.data(), vertexByteSize);
@@ -325,14 +339,24 @@ void MyApp::BuildGeometry()
 	submesh.StartIndexLocation = 0;
 	submesh.BaseVertexLocation = 0;
 
-	newGeometry->DrawArgs["triangle"] = submesh;
+	newGeometry->DrawArgs["box"] = submesh;
+
+	SubmeshGeometry trisubmesh;
+	trisubmesh.IndexCount = 6;
+	trisubmesh.StartIndexLocation = 36;
+	trisubmesh.BaseVertexLocation = 0;
+
+	newGeometry->DrawArgs["triangle"] = trisubmesh;
 
 	Geometry.push_back(newGeometry);
+
 }
 
 //=========================================================================================
 void MyApp::BuildPipelineStateObject()
 {
+	D3D12_RASTERIZER_DESC rasterDesc = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineDesc;
 	ZeroMemory(&pipelineDesc, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));
 
@@ -340,7 +364,7 @@ void MyApp::BuildPipelineStateObject()
 	pipelineDesc.pRootSignature = RootSignature.Get();
 	pipelineDesc.VS = { reinterpret_cast<BYTE*>(VertexShaderByteCode->GetBufferPointer()), VertexShaderByteCode->GetBufferSize() };
 	pipelineDesc.PS = { reinterpret_cast<BYTE*>(PixelShaderByteCode->GetBufferPointer()), PixelShaderByteCode->GetBufferSize() };
-	pipelineDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+	pipelineDesc.RasterizerState = rasterDesc;
 	pipelineDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 	pipelineDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
 	pipelineDesc.SampleMask = UINT_MAX;
