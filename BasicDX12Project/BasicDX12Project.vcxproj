@@ -134,6 +134,7 @@
     <ClCompile Include="Source\FromBook\Camera.cpp" />
     <ClCompile Include="Source\FromBook\d3dUtil.cpp" />
     <ClCompile Include="Source\FromBook\DDSTextureLoader.cpp" />
+    <ClCompile Include="Source\FromBook\FrameResource.cpp" />
     <ClCompile Include="Source\FromBook\GameTimer.cpp" />
     <ClCompile Include="Source\FromBook\GeometryGenerator.cpp" />
     <ClCompile Include="Source\FromBook\MathHelper.cpp" />
@@ -145,6 +146,7 @@
     <ClInclude Include="Source\FromBook\d3dUtil.h" />
     <ClInclude Include="Source\FromBook\d3dx12.h" />
     <ClInclude Include="Source\FromBook\DDSTextureLoader.h" />
+    <ClInclude Include="Source\FromBook\FrameResource.h" />
     <ClInclude Include="Source\FromBook\GameTimer.h" />
     <ClInclude Include="Source\FromBook\GeometryGenerator.h" />
     <ClInclude Include="Source\FromBook\MathHelper.h" />
